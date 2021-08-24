@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class RestproxyApplication {
+public class RestProxyApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(RestproxyApplication.class, args);
+		SpringApplication.run(RestProxyApplication.class, args);
 	}
 
 }

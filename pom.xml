@@ -14,7 +14,7 @@
 	<name>restproxy</name>
 	<description>Proxies, records and logs ReST requests</description>
 	<properties>
-		<java.version>16</java.version>
+		<java.version>11</java.version>
 	</properties>
 	<dependencies>
 		<dependency>
