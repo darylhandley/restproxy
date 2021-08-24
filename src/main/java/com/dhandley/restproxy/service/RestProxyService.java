@@ -36,39 +36,18 @@ public class RestProxyService {
       .build();
   }
 
-  public String getMessage() {
-    return "Hello world";
-  }
-
-  public HttpServletResponse proxyRequest(HttpRequest request) {
-    HttpClient client = HttpClient.newBuilder()
-      .version(HttpClient.Version.HTTP_2)
-      .build();
-
-
-//    HttpResponse<String> response =
-//      client.send(request, HttpResponse.BodyHandlers.ofString());
-
-    return null;
-
-//    HttpRequest myRequest = HttpRequest.newBuilder()
-//      .uri(URI.create("http://openjdk.java.net/"))
-//      .timeout(Duration.ofMinutes(1))
-//      .header("Content-Type", "application/json")
-//      .POST(BodyPublishers.ofFile(Paths.get("file.json")))
-//      .build();
-
-
-
-
-
-
-//    return "Hello world";
-  }
-
 
   public ResponseEntity<String> proxyRequest(RequestEntity<String> request) {
+    try {
+      HttpRequest proxyRequest = requestEntityToHttpRequest(request);
+      HttpResponse<String> proxiedResponse = httpClient.send(proxyRequest, HttpResponse.BodyHandlers.ofString());
+      return httpResponseToResponseEntity(proxiedResponse);
+    } catch (IOException | InterruptedException excp) {
+      throw new RuntimeException(excp);
+    }
+  }
 
+  private HttpRequest requestEntityToHttpRequest(RequestEntity<String> request) {
     URI proxiedURI = getProxiedUri(request.getUrl());
 
     HttpRequest.BodyPublisher bodyPublisher = (request.getBody() == null) ?
@@ -79,6 +58,8 @@ public class RestProxyService {
       .method(request.getMethod().toString(), bodyPublisher);
 
     // transfer headers
+    // note that accept-encoding was removed so we don't have to handle unzipping, but we
+    // might want to add it back later
     List<String> restrictedHeaders = List.of("host", "connection", "content-length", "accept-encoding");
     for (String key : request.getHeaders().keySet()) {
       if (!restrictedHeaders.contains(key)) {
@@ -86,67 +67,36 @@ public class RestProxyService {
       }
     }
 
-    HttpRequest proxyRequest = builder.build();
+    return builder.build();
+
+  }
 
 
-    try {
-      HttpResponse<String> proxiedResponse = httpClient.send(proxyRequest, HttpResponse.BodyHandlers.ofString());
+  private ResponseEntity<String> httpResponseToResponseEntity(HttpResponse httpResponse) {
+    // System.out.println(httpResponse.body());
 
-      System.out.println(proxiedResponse.body());
+    // convert proxied headers to returned headers
+    HttpHeaders responseHeaders = new HttpHeaders();
+    httpResponse.headers().map().entrySet().stream()
+      .forEach(entry -> {
+        entry.getValue().forEach(value -> responseHeaders.add(entry.getKey(), value));
+      });
 
-      // convert proxied headers to returned headers
-      HttpHeaders responseHeaders = new HttpHeaders();
-      proxiedResponse.headers().map().entrySet().stream()
-        .forEach(entry -> {
-          entry.getValue().forEach(value -> responseHeaders.add(entry.getKey(), value));
-        });
-
-      return new ResponseEntity(
-        proxiedResponse.body(),
-        responseHeaders ,
-        HttpStatus.valueOf(proxiedResponse.statusCode())
-      );
-
-    } catch (IOException | InterruptedException excp) {
-      throw new RuntimeException(excp);
-    }
-
-
+    return new ResponseEntity(
+      httpResponse.body(),
+      responseHeaders ,
+      HttpStatus.valueOf(httpResponse.statusCode())
+    );
   }
 
   private URI getProxiedUri(URI uri) {
     try {
-      String url = uri.getRawPath() + "?" + uri.getRawQuery();
-      URI proxiedUri = new URI(proxiedHost + url);
-      return proxiedUri;
+      String url = uri.getRawPath()  + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
+      return new URI(proxiedHost + url);
     } catch (URISyntaxException excp) {
       throw new RuntimeException(excp);
     }
   }
 
 
-
-  private HttpRequest httpServletRequestToHttpRequest(HttpServletRequest request) {
-
-    // convert headers to varchar
-    String [] headers = {};
-    // String [] headers = request.getHeaderNames();
-//    for (String headerName : request.getHeaderNames().) {
-//
-//    }
-
-    // headers, body, contenttype, url, ..
-    HttpRequest httpRequest = HttpRequest.newBuilder()
-      .headers(headers)
-//      .uri(URI.create("http://openjdk.java.net/"))
-//      .timeout(Duration.ofMinutes(1))
-//      .header("Content-Type", "application/json")
-//      .POST(BodyPublishers.ofFile(Paths.get("file.json")))
-      .build();
-
-
-    return httpRequest;
-
-
-  }
 }
