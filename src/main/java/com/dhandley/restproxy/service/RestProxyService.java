@@ -1,33 +1,26 @@
 package com.dhandley.restproxy.service;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 
-import org.springframework.context.annotation.Bean;
+import com.dhandley.restproxy.util.ProxyUrlUtil;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.MultiValueMap;
 
 @Service
 public class RestProxyService {
 
   private final HttpClient httpClient;
 
-  private String proxiedHost = "https://clm-staging.sonatype.com";
+  public static String PROXIED_HOST = "https://clm-staging.sonatype.com";
 
 
   public RestProxyService() {
@@ -48,7 +41,7 @@ public class RestProxyService {
   }
 
   private HttpRequest requestEntityToHttpRequest(RequestEntity<String> request) {
-    URI proxiedURI = getProxiedUri(request.getUrl());
+    URI proxiedURI = ProxyUrlUtil.proxyIt(request.getUrl(), PROXIED_HOST);
 
     HttpRequest.BodyPublisher bodyPublisher = (request.getBody() == null) ?
       HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(request.getBody());
@@ -87,15 +80,6 @@ public class RestProxyService {
       responseHeaders ,
       HttpStatus.valueOf(httpResponse.statusCode())
     );
-  }
-
-  private URI getProxiedUri(URI uri) {
-    try {
-      String url = uri.getRawPath()  + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
-      return new URI(proxiedHost + url);
-    } catch (URISyntaxException excp) {
-      throw new RuntimeException(excp);
-    }
   }
 
 
