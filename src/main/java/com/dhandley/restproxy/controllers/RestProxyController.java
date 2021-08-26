@@ -34,7 +34,7 @@ public class RestProxyController {
   public ResponseEntity<String> proxy(RequestEntity<String> request) {
     String requestData = UUID.randomUUID().toString() + " " + request.getMethod() + " " + request.getUrl().toString();
     log.info("Received Request " + requestData);
-    ResponseEntity<String> response = restProxyService.proxyRequest(request);
+    ResponseEntity<String> response = restProxyService.proxyRequestOkHttp(request);
     requestLogger.logRequestInfoToFile(request);
     log.info("Completed Request " + requestData);
     return response;
