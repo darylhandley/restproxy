@@ -3,6 +3,8 @@ package com.dhandley.restproxy.requestlogger;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,22 +40,25 @@ public class RequestLogger {
 
   private List<Map> items = new ArrayList<>();
 
-  private static String postmanId = UUID.randomUUID().toString().substring(0,4);
-  private final File swaggerFile = new File("/Users/darylhandley/dev/projects/restproxy/hdsSwagger" + postmanId + ".json");
+  private static String startDateString = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm").format(LocalDateTime.now());
+  private static String postmanId = UUID.randomUUID().toString().substring(0,5);
+  private final File swaggerFile = new File("/Users/darylhandley/dev/projects/restproxy/hdsSwagger_" + startDateString + ".json");
 
 
   public void logRequestInfoToFile(RequestEntity<String> request) {
     // skip noise (things that get auto uploaded)
-//    List<String> skipList = ImmutableList.of(
-//        "https://clm-staging.sonatype.com/rest/environment/stats"
-//    );
-//    if (skipList.contains(request.getURI().toString())) {
-//      return;
-//    }
+    List<String> skipPatterns = ImmutableList.of(
+        "user-telemetry"
+    );
+    boolean skip = skipPatterns.stream()
+      .anyMatch(pattern -> request.getUrl().toString().contains(pattern));
+    if (skip) {
+      return;
+    }
 
     URI proxiedUri =  ProxyUrlUtil.proxyIt(request.getUrl(), RestProxyService.PROXIED_HOST);
     Map<String, List<String>> headers = getHeadersFromRequest(request);
-    String body = getBody(request);
+    String body = request.getBody(); // == null ? null : formatJsonWithGSON(request.getBody());
     String method = request.getMethod().toString();
 
     // create the swagggerItem and export to swagger file
@@ -117,7 +122,12 @@ public class RequestLogger {
     String[] hostList = proxiedUri.getHost().split("\\.");
     String[] pathList = proxiedUri.getPath().split("\\/");
     String scheme = proxiedUri.getScheme();
-    String port = Integer.toString(proxiedUri.getPort());
+    String port;
+    if (proxiedUri.getPort() == -1) {
+      port = scheme.equals("http") ? "80" : "443";
+    } else {
+      port = Integer.toString(proxiedUri.getPort());
+    }
 
     String name = method + " " + proxiedUri.getPath();
 
@@ -125,7 +135,7 @@ public class RequestLogger {
 
     List<Map<String, String>> params = queryParams.stream()
       .filter(qp -> qp.value !=null) // temp need to possibly fix this
-      .map(qp -> nameValuePairToMap(qp.name, qp.value))
+      .map(qp -> keyValueToMap(qp.name, qp.value))
       .collect(Collectors.toList());
 
 
@@ -196,12 +206,31 @@ public class RequestLogger {
      * 				}
      */
 
-
+    /**
+     * "header": [
+     *                    {
+     * 						"key": "firstHeader",
+     * 						"value": "first",
+     * 						"type": "text"
+     *          },
+     *          {
+     * 						"key": "secondHeader",
+     * 						"value": "second",
+     * 						"type": "text"
+     *          }
+     * 				],
+     */
+    List<NameValuePair> headers = getHeadersFromRequestAsNameValuePair(request);
+    List<String> headersToSkip = List.of("host");
+    List<Map> headersJson = headers.stream()
+      .filter(h -> !headersToSkip.contains(h.name))
+      .map(h -> keyValueTypeToMap(h.name, h.value, "text"))
+      .collect(Collectors.toList());
 
 
     Map jsonRequest  = Map.of(
         "method", method,
-        "header", ImmutableList.of(),
+        "header", headersJson,
         "url", Map.of(
             "raw", proxiedUri.toString(),
             "protocol", scheme,
@@ -228,7 +257,6 @@ public class RequestLogger {
     return
         Map.of(
             "name", name,
-            "header", ImmutableList.of(),
             "request",jsonRequest
         );
 
@@ -251,12 +279,20 @@ public class RequestLogger {
 
   }
 
-  private Map<String, String> nameValuePairToMap(String key, String value) {
+  private Map<String, String> keyValueToMap(String key, String value) {
     return Map.of(
       "key", key,
       "value", value
     );
 
+  }
+
+  private Map<String, String> keyValueTypeToMap(String key, String value, String type) {
+    return Map.of(
+      "key", key,
+      "value", value,
+      "type", type
+    );
   }
 
 
@@ -266,7 +302,7 @@ public class RequestLogger {
     Map swaggerData = Map.of(
       "info", Map.of(
         "_postman_id", postmanId,
-        "name", "HDS Daryl " + postmanId,
+        "name", "HDS Daryl " + startDateString,
         "schema",  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
       ),
       "item", items,
@@ -315,22 +351,20 @@ public class RequestLogger {
     return result;
   }
 
-  private String getBody(HttpEntity<String> request) {
-    return request.getBody();
-//    try {
-//      if (request instanceof HttpPost) {
-//        InputStream inputStream = ((HttpPost) request).getEntity().getContent();
-//        String text = new BufferedReader(
-//            new InputStreamReader(inputStream, StandardCharsets.UTF_8))
-//            .lines()
-//            .collect(Collectors.joining("\n"));
-//        return text;
-//      }
-//    } catch (Exception exception) {
-//      throw new RuntimeException(exception);
-//    }
-//    return null;
+  private List<NameValuePair> getHeadersFromRequestAsNameValuePair(RequestEntity<String> request) {
+
+    List<NameValuePair> nameValuePairs = new ArrayList<>();
+
+    request.getHeaders().entrySet().forEach(header -> {
+      header.getValue().forEach(valueInList -> {
+        nameValuePairs.add(new NameValuePair(header.getKey(), valueInList));
+      });
+    });
+
+    return nameValuePairs;
   }
+
+
 
   private class NameValuePair {
     NameValuePair(String name, String value) {

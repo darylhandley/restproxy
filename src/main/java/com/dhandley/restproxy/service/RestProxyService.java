@@ -101,7 +101,6 @@ public class RestProxyService {
       }
 
 
-
       // transfer headers
       // note that accept-encoding was removed so we don't have to handle unzipping, but we
       // might want to add it back later
